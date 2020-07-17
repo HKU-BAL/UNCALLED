@@ -31,10 +31,8 @@ u64 max(u64 a, u64 b);
 
 u64 min(u64 a, u64 b);
 
-class Range {
-    
-    public:
-    u64 start_, end_; 
+struct __attribute__ ((aligned(16))) Range {
+    u64 start_, end_;
 
     //Copy constructor
     Range(const Range &prev);

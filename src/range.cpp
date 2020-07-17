@@ -22,6 +22,7 @@
  */
 
 #include "range.hpp"
+#include <immintrin.h>
 
 size_t max(size_t a, size_t b) {
     return a > b ? a : b;
@@ -110,10 +111,14 @@ bool Range::is_valid() const {
 }
 
 bool operator< (const Range &q1, const Range &q2) {
-    return q1.start_ < q2.start_ ||
-           (q1.start_ == q2.start_ && q1.end_ < q2.end_);
+    //return q1.start_ < q2.start_ || (q1.start_ == q2.start_ && q1.end_ < q2.end_);
+    __m128i a = _mm_load_si128(reinterpret_cast<const __m128i*>(&q1)), b = _mm_load_si128(reinterpret_cast<const __m128i*>(&q2));
+    return _mm_movemask_epi8(_mm_cmplt_epi8(a, b)) > _mm_movemask_epi8(_mm_cmpgt_epi8(a, b));
 }
 
 bool operator== (const Range &q1, const Range &q2) {
-    return q1.start_ == q2.start_ && q1.end_ == q2.end_;
+    //return q1.start_ == q2.start_ && q1.end_ == q2.end_;
+    __m128i a = _mm_load_si128(reinterpret_cast<const __m128i*>(&q1)), b = _mm_load_si128(reinterpret_cast<const __m128i*>(&q2));
+    __m128i neq = _mm_xor_si128(a, b);
+    return _mm_test_all_zeros(neq, neq);
 }
