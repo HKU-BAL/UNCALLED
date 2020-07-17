@@ -145,7 +145,7 @@ Mapper::Mapper()
     }
     PathBuffer::TYPE_MASK = (u8) ((1 << TYPE_BITS) - 1);
 
-    kmer_probs_ = std::vector<float>(kmer_count<KLEN>());
+    kmer_probs_ = std::vector<float, aligned_allocator<float, 32>>(kmer_count<KLEN>());
     prev_paths_ = std::vector<PathBuffer>(PRMS.max_paths);
     next_paths_ = std::vector<PathBuffer>(PRMS.max_paths);
     sources_added_ = std::vector<bool>(kmer_count<KLEN>(), false);
@@ -382,9 +382,10 @@ bool Mapper::map_next() {
     float event = norm_.pop();
 
     //TODO: store kmer_probs_ in static array
-    for (u16 kmer = 0; kmer < kmer_probs_.size(); kmer++) {
+    /*for (u16 kmer = 0; kmer < kmer_probs_.size(); kmer++) {
         kmer_probs_[kmer] = model.match_prob(event, kmer);
-    }
+    }*/
+    model.calc_event_match_prob(event, kmer_probs_);
 
     Range prev_range;
     u16 prev_kmer;

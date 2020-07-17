@@ -172,7 +172,7 @@ class Mapper {
     //u32 read_num_;
     bool last_chunk_, reset_;
     State state_;
-    std::vector<float> kmer_probs_;
+    std::vector<float, aligned_allocator<float, 32>> kmer_probs_;
     std::vector<PathBuffer> prev_paths_, next_paths_;
     std::vector<bool> sources_added_;
     u32 prev_size_,

@@ -30,6 +30,7 @@
 #include "event_detector.hpp"
 #include "util.hpp"
 #include "bp.hpp"
+#include "aligned_allocator.h"
 
 template<KmerLen KLEN>
 class PoreModel {
@@ -154,6 +155,21 @@ class PoreModel {
         loaded_ = true;
     }
 
+    void calc_event_match_prob(const float &event, std::vector<float, aligned_allocator<float, 32>> &result) const {
+        __m256 vec_event = _mm256_broadcast_ss(&event);
+        static const __m256 vec_zero = _mm256_set1_ps(0.0f);
+        for (u16 kmer = 0; kmer < kmer_count_; kmer += 8) {
+            __m256 vec_means = _mm256_load_ps(&lv_means_[kmer]);
+            __m256 vec_vars = _mm256_load_ps(&lv_vars_x2_[kmer]);
+            __m256 vec_lognorms = _mm256_load_ps(&lognorm_denoms_[kmer]);
+            __m256 vec_value = _mm256_sub_ps(vec_event, vec_means);
+            vec_value = _mm256_mul_ps(vec_value, vec_value);
+            vec_value = _mm256_div_ps(vec_value, vec_vars);
+            vec_value = _mm256_add_ps(vec_value, vec_lognorms);
+            _mm256_store_ps(&result[kmer], _mm256_sub_ps(vec_zero, vec_value));
+        }
+    }
+
     float match_prob(float samp, u16 kmer) const {
         return (-pow(samp - lv_means_[kmer], 2) / lv_vars_x2_[kmer]) - lognorm_denoms_[kmer];
     }
@@ -179,7 +195,7 @@ class PoreModel {
     }
 
     private:
-    std::vector<float> lv_means_, lv_vars_x2_, lognorm_denoms_;
+    std::vector<float, aligned_allocator<float, 32>> lv_means_, lv_vars_x2_, lognorm_denoms_;
     float lambda_, model_mean_, model_stdv_;
     u16 kmer_count_;
     bool loaded_, complement_;
