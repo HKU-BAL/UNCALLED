@@ -133,7 +133,7 @@ class BwaIndex {
         }
     }
 
-    Range get_neighbor(Range r1, u8 base) const {
+    Range get_neighbor(const Range &r1, u8 base) const {
         u64 os, oe;
         bwt_2occ(index_, r1.start_ - 1, r1.end_, base, &os, &oe);
         return Range(index_->L2[base] + os + 1, index_->L2[base] + oe);
