@@ -97,8 +97,9 @@ static inline int __occ_aux(uint64_t y, int c) {
     // reduce nucleotide counting to bits counting
     y = ((c & 2) ? y : ~y) >> 1 & ((c & 1) ? y : ~y) & 0x5555555555555555ull;
     // count the number of 1s in y
-    y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
-    return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
+    return __builtin_popcountll(y);
+    //y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
+    //return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
 }
 
 bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c) {
