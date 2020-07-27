@@ -128,11 +128,17 @@ bool Mapper::PathBuffer::is_seed_valid(bool path_ended) const{
 }
 
 
-bool operator< (const Mapper::PathBuffer &p1, 
+bool operator< (const Mapper::PathBuffer &p1,
                 const Mapper::PathBuffer &p2) {
-    return p1.fm_range_ < p2.fm_range_ ||
+    /*return p1.fm_range_ < p2.fm_range_ ||
            (p1.fm_range_ == p2.fm_range_ && 
-            p1.seed_prob_ < p2.seed_prob_);
+            p1.seed_prob_ < p2.seed_prob_);*/
+    static const __m128i sign_bits = _mm_set1_epi8((char)0x80);
+    const __m128i a = _mm_xor_si128(_mm_set_epi64((__m64)p1.fm_range_.start_, (__m64)p1.fm_range_.end_), sign_bits);
+    const __m128i b = _mm_xor_si128(_mm_set_epi64((__m64)p2.fm_range_.start_, (__m64)p2.fm_range_.end_), sign_bits);
+    const int lt = _mm_movemask_epi8(_mm_cmplt_epi8(a, b)) - _mm_movemask_epi8(_mm_cmpgt_epi8(a, b));
+    const unsigned int less_than = (lt > 0), equal = (lt == 0), prob_lt = (p1.seed_prob_ < p2.seed_prob_);
+    return less_than | (equal & prob_lt);
 }
 
 Mapper::Mapper()
@@ -475,7 +481,7 @@ bool Mapper::map_next() {
 
         u32 next_size = next_path - next_paths_.begin();
 
-        pdqsort(next_paths_.begin(), next_path);
+        pdqsort_branchless(next_paths_.begin(), next_path);
         //std::sort(next_paths_.begin(), next_path);
 
         u16 source_kmer;

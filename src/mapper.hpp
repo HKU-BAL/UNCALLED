@@ -138,17 +138,13 @@ class Mapper {
         static u32 TYPE_ADDS[EventType::NUM_TYPES];
 
         Range fm_range_;
-        u8 length_,
-            consec_stays_;
-        u16 kmer_;
-        u16 total_match_len_;
-
         float seed_prob_;
         float *prob_sums_;
-
+        u8 length_, consec_stays_;
+        u16 kmer_;
+        u16 total_match_len_;
         u32 event_types_;
         u8 path_type_counts_[EventType::NUM_TYPES];
-
         bool sa_checked_;
     };
 
