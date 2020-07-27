@@ -116,7 +116,7 @@ bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c) {
 
     // calculate Occ up to the last k/32
     end = p + (((k >> 5) - ((k & ~OCC_INTV_MASK) >> 5)) << 1);
-    for (; p < end; p += 2) n += __occ_aux((uint64_t) p[0] << 32 | p[1], c);
+    for (; p < end; p += 2) n += __occ_aux(*(uint64_t*)p, c);
 
     // calculate Occ
     n += __occ_aux(((uint64_t) p[0] << 32 | p[1]) & ~((1ull << ((~k & 31) << 1)) - 1), c);
@@ -143,7 +143,7 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
         // calculate *ok
         j = k >> 5 << 5;
         for (i = k / OCC_INTERVAL * OCC_INTERVAL; i < j; i += 32, p += 2)
-            n += __occ_aux((uint64_t) p[0] << 32 | p[1], c);
+            n += __occ_aux(*(uint64_t*)p, c);
         m = n;
         n += __occ_aux(((uint64_t) p[0] << 32 | p[1]) & ~((1ull << ((~k & 31) << 1)) - 1), c);
         if (c == 0) n -= ~k & 31; // corrected for the masked bits
@@ -151,7 +151,7 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
         // calculate *ol
         j = l >> 5 << 5;
         for (; i < j; i += 32, p += 2)
-            m += __occ_aux((uint64_t) p[0] << 32 | p[1], c);
+            m += __occ_aux(*(uint64_t*)p, c);
         m += __occ_aux(((uint64_t) p[0] << 32 | p[1]) & ~((1ull << ((~l & 31) << 1)) - 1), c);
         if (c == 0) m -= ~l & 31; // corrected for the masked bits
         *ol = m;
