@@ -30,7 +30,7 @@ uncalled = Extension(
                      "./pdqsort",
                      "./toml11"],
      libraries = ["hdf5", "z", "dl", "m"],
-     extra_compile_args = ["-std=c++11", "-O3"],
+     extra_compile_args = ["-std=c++11", "-O3", "-march=native", "-mtune=native"],
      define_macros = [("PYBIND", None)]
 )
 
