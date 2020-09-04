@@ -5,14 +5,6 @@ import os
 import subprocess
 import sys
 
-class make_bwa(build_ext):
-    def run(self):
-        sys.stderr.write("building libbwa\n")
-        subprocess.call(["make", 
-                         "-C", "./bwa", 
-                         "-f", "../src/Makefile_bwa"])
-        build_ext.run(self)
-
 uncalled = Extension(
     "uncalled.mapping",
      sources = [
@@ -28,14 +20,16 @@ uncalled = Extension(
                 "src/realtime_pool.cpp",
                 "src/seed_tracker.cpp", 
                 "src/normalizer.cpp", 
-                "src/range.cpp"],
+                "src/range.cpp",
+                "src/bwa/bntseq.c",
+                "src/bwa/bwt.c",
+                "src/bwa/utils.c"],
      include_dirs = ["./",
                      "./pybind11/include", 
                      "./fast5/include",
                      "./pdqsort",
                      "./toml11"],
-     library_dirs = ["./bwa"],
-     libraries = ["hdf5", "bwa", "z", "dl", "m"],
+     libraries = ["hdf5", "z", "dl", "m"],
      extra_compile_args = ["-std=c++11", "-O3"],
      define_macros = [("PYBIND", None)]
 )
@@ -51,5 +45,4 @@ setup(name = "uncalled",
       py_modules = ['uncalled.params', 'uncalled.minknow_client', 'uncalled.index', 'uncalled.pafstats'],
       ext_modules = [uncalled],
       package_data = {'uncalled': ['models/*', 'conf/*']},
-      scripts = ['scripts/uncalled'],
-      cmdclass={'build_ext': make_bwa})
+      scripts = ['scripts/uncalled'])
