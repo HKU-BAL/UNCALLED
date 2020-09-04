@@ -130,22 +130,23 @@ bool Mapper::PathBuffer::is_seed_valid(bool path_ended) const{
 
 bool operator< (const Mapper::PathBuffer &p1,
                 const Mapper::PathBuffer &p2) {
-    /*return p1.fm_range_ < p2.fm_range_ ||
-           (p1.fm_range_ == p2.fm_range_ && 
-            p1.seed_prob_ < p2.seed_prob_);*/
-#define UNCALLED_32BIT_FM_INDEX
-#ifdef UNCALLED_32BIT_FM_INDEX
-    const long long i1 = p1.fm_range_.start_ << 32 | p1.fm_range_.end_;
-    const long long i2 = p2.fm_range_.start_ << 32 | p2.fm_range_.end_;
-    const unsigned int less_than = (i1 < i2), equal = (i1 == i2), prob_lt = (p1.seed_prob_ < p2.seed_prob_);
-#else
+#ifdef __SSE2__
     static const __m128i sign_bits = _mm_set1_epi8((char)0x80);
     const __m128i a = _mm_xor_si128(_mm_set_epi64((__m64)p1.fm_range_.start_, (__m64)p1.fm_range_.end_), sign_bits);
     const __m128i b = _mm_xor_si128(_mm_set_epi64((__m64)p2.fm_range_.start_, (__m64)p2.fm_range_.end_), sign_bits);
     const int lt = _mm_movemask_epi8(_mm_cmplt_epi8(a, b)) - _mm_movemask_epi8(_mm_cmpgt_epi8(a, b));
     const unsigned int less_than = (lt > 0), equal = (lt == 0), prob_lt = (p1.seed_prob_ < p2.seed_prob_);
-#endif
+    /* If FM ranges does not exceed 32-bit integers,
+     * the following comparison is faster than SSE comparison above
+    const long long i1 = p1.fm_range_.start_ << 32 | p1.fm_range_.end_;
+    const long long i2 = p2.fm_range_.start_ << 32 | p2.fm_range_.end_;
+    const unsigned int less_than = (i1 < i2), equal = (i1 == i2), prob_lt = (p1.seed_prob_ < p2.seed_prob_);*/
     return less_than | (equal & prob_lt);
+#else
+    return p1.fm_range_ < p2.fm_range_ ||
+           (p1.fm_range_ == p2.fm_range_ &&
+            p1.seed_prob_ < p2.seed_prob_);
+#endif
 }
 
 Mapper::Mapper()

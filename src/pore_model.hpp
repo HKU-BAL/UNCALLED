@@ -156,8 +156,10 @@ class PoreModel {
     }
 
     void calc_event_match_prob(const float &event, std::vector<float, aligned_allocator<float, 32>> &result) const {
+#ifdef __AVX__
         __m256 vec_event = _mm256_broadcast_ss(&event);
         static const __m256 vec_zero = _mm256_set1_ps(0.0f);
+        // Assuming kmer_count_ is divisible by 8 here
         for (u16 kmer = 0; kmer < kmer_count_; kmer += 8) {
             __m256 vec_means = _mm256_load_ps(&lv_means_[kmer]);
             __m256 vec_vars = _mm256_load_ps(&lv_vars_x2_[kmer]);
@@ -168,6 +170,11 @@ class PoreModel {
             vec_value = _mm256_add_ps(vec_value, vec_lognorms);
             _mm256_store_ps(&result[kmer], _mm256_sub_ps(vec_zero, vec_value));
         }
+#else
+        for(u16 kmer = 0; kmer < kmer_count_; kmer++) {
+            result[kmer] = match_prob(event, kmer);
+        }
+#endif
     }
 
     float match_prob(float samp, u16 kmer) const {
