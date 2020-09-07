@@ -1,8 +1,35 @@
-Editted 3st Aug, 2020
+## Overview
 
-## Note
+This is an attempt to accelerate UNCALLED with SSE and AVX instruction sets on x86 CPUs. An acceleration of 15-25% is achieved.
 
-A `CMake` build script that builds off-line mapping code (`uncalled_map.cpp`) was written and is used throughout this optimization work for IDE, testing mapping speed, etc.. The portion of `BWA` library that is used by `UNCALLED`, with modifications applied, is incorporated into `src` folder. The real building script has not been updated to the changes made.
+Building with GCC on Linux is tested. Building on macOS and Windows has not been tried yet.
+
+The build script targets for `native` architecture. Macro checks are added to check for instruction availability at compile time. It is fine to build the program on a computer without these instruction sets. In that circumstance the original scalar path will be taken. But run-time CPUID check and path selection is not implemented, so do not build the binary on a modern processor and put that executable on an old computer or it will crash miserably.
+
+## Hot spots of the program
+
+Top ten time consuming functions, as reported by GProf, are the following:
+
+```
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  Ks/call  Ks/call  name    
+ 24.22    268.25   268.25 2831711712   0.00     0.00  operator<(Mapper::PathBuffer const&, Mapper::PathBuffer const&)
+  8.54    362.79    94.54 7598691684   0.00     0.00  Mapper::PathBuffer::operator=(Mapper::PathBuffer const&)
+  4.22    409.48    46.69    2559737   0.00     0.00  Mapper::map_next()
+  3.46    447.82    38.34  954365446   0.00     0.00  Mapper::PathBuffer::make_child(Mapper::PathBuffer&, Range&, unsigned short, float, Mapper::EventType)
+  2.51    475.60    27.79 26133361385  0.00     0.00  __gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >::operator*() const
+  2.32    501.25    25.65   63764583   0.00     0.00  std::pair<__gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >, bool> pdqsort_detail::partition_right_branchless<__gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >, std::less<Mapper::PathBuffer> >(__gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >, __gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >, std::less<Mapper::PathBuffer>)
+  2.31    526.85    25.60 1650204529   0.00     0.00  bwt_occ
+  2.09    550.03    23.18 1138613867   0.00     0.00  bwt_invPsi
+  1.72    569.12    19.09 5450431722   0.00     0.00  std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> >::end()
+  1.69    587.83    18.72 8612562513   0.00     0.00  __gnu_cxx::__normal_iterator<Mapper::PathBuffer*, std::vector<Mapper::PathBuffer, std::allocator<Mapper::PathBuffer> > >::__normal_iterator(Mapper::PathBuffer* const&)
+```
+
+They can be categorized as
+
+* Sorting path buffers (where comparison between path buffers is massively called)
+* Branching new path
+* FM-index
 
 ## Optimizations implemented
 
@@ -90,7 +117,7 @@ bool operator< (const Mapper::PathBuffer &p1, const Mapper::PathBuffer &p2) {
 }
 ```
 
-and this implementation improved the overall performance indeed. It is also tried to load both two 64-bit integers of `Range` (primary key) and the 32-bit floating number seed probability (secondary key) into 256-bit AVX registers and perform AVX comparisons, but this does not bring any considerable gain.
+and this implementation improved the overall performance indeed. It is also tried to load both two 64-bit integers of `Range` (primary key) and the 32-bit floating number seed probability (secondary key) into 256-bit AVX registers and perform AVX comparisons, but this does not bring any considerable performance gain.
 
 If FM-index range does not exceed 32-bit, the comparison between `PathBuffer`s can be even faster by directly doing 64-bit integer comparisons without using SSE registers and bring extra overall performance improvement around 3%:
 
@@ -100,7 +127,21 @@ If FM-index range does not exceed 32-bit, the comparison between `PathBuffer`s c
     const unsigned int less_than = (i1 < i2), equal = (i1 == i2), prob_lt = (p1.seed_prob_ < p2.seed_prob_);
 ```
 
-## Other ideas
+## Abandoned ideas
+
+#### Porting main loop to GPU
+
+For each new event, besides a pass of sorting, there are two loops whose number of repetitions vary from a few times to a thousand times. This is potentially parallelizable.
+
+However, by timing the loops, it turns out that the entire loop only takes a little time in the magnitude of hundreds microseconds, and each iteration spends just a few microseconds. The idea of parallelizing these two loops on GPU was ruled out, with consideration that the overhead of data transmission between host and GPU could probably overweigh the gain brought by parallelization.
+
+#### FM-index query on GPU
+
+There are a number of papers, eg. [Boosting the FM-Index on the GPU: Effective Techniques to Mitigate Random Memory Access](https://ieeexplore.ieee.org/document/6975110), on the topic of GPU acceleration of FM-index. They demonstrates the increase in numbers of queries can be done per second.
+
+The idea of putting FM-index on GPU may help a lot in the situation of massive amount of asynchronous parallel FM-index queries, but in the case of UNCALLED, for processing the signal data from a single nanopore, FM-index queries are steps in the algorithm in serial with other parts of the program. Without making major changes to the logic flow of UNCALLED, whether porting FM-index to GPU can help accelerate UNCALLED is questionable.
+
+## Failed attempts
 
 #### Vectorization of BWT `Occ`
 
@@ -114,57 +155,22 @@ where `__occ_aux` is an expression that takes constant time to evaluate and has 
 
 With `POPCNT` optimization applied, `bwt_occ` only spends 9-10ns on average for each call. There seems to be little room for further improvement inside `bwt_occ`.
 
-The same situation also applies to `bwt_2occ`: similar simple loops exist but the actual number of repetitions is at most of the time too low to gain from vectorization on loop.
+The same situation also applies to `bwt_2occ`: similar simple loops exist, but the actual number of repetitions, at most of the time, is too low to gain from vectorization on loop.
 
-There is a paper [Vectorized Character Counting for Faster Pattern Matching](https://arxiv.org/abs/1811.06127v2) on SIMD implementation of `Occ` calculation. This is not something can be immediately used into `BWA` library code, but can be heuristic on accelerating FM-index part in `UNCALLED`.
+#### Speeding up sorting
 
-#### Optimization on seed tracker
+Sorting path buffers on every new event also takes around a quarter of overall program running time. Comparison between path buffers has been optimized as mentioned above. With that applied, though the time spent on comparison indeed decreased, the time it costs is still considerable. And it is not because a comparison spends a lot of time, but from a very large number of comparisons called.
 
-When adding a new seed to the seed tracker, there is a loop that finds the longest previously existing alignments whose starting position is before the new one, while satisfying a few other conditions.
+With little room for further cutting down the time cost by a single comparison, the next idea is to bring the number of comparisons down. It is observed that within sorting, there is often a process of finding the first element less than or greater than the pivot element, searching starting from the first, or reversely from the last element, one by one, in a sub array.
 
-```c++
-void SeedTracker::add_seed(u64 ref_en, u32 ref_len, u32 evt_st) {
-    SeedGroup new_aln(Range(ref_en-ref_len+1, ref_en), evt_st);
-    //Locations sorted by decreasing ref_en_.start
-    //Find the largest aln s.t. aln->ref_en_.start <= new_aln.ref_en_.start
-    //AKA r1 <= r2
-    auto aln = alignments_.lower_bound(new_aln), aln_match = alignments_.end();
+With further detailed observation, it turns out that the desired element is often far away from the starting point. Then it came the idea to do vectorized comparison, in hope of being able to skip through undesired elements faster.
 
-    u64 e2 = new_aln.evt_en_, //new event aln
-        r2 = new_aln.ref_en_.start_; //new ref aln
+The first attempt is to put the 64-bit FM-index starting position at higher part and 64-bit FM-index ending position at lower part to form a 128-bit comparison key for each element. Then, in a 256-bit AVX register, two elements can be compared with the pivot element simultaneously. When sorting, in an ideal condition, the iterator will skim the sub array in the step of 2, until the comparison reports negative and the desired element is then found. Here the third key, seed probability, is ignored. That is because a strictly equivalent comparison is not required here. What is wanted is to skip undesired elements as fast as possible. And in practice, it is observed that by only comparing the first two keys is indeed sufficient to identify two elements as undesired in most of the time.
 
-    while (aln != alignments_.end()) {
-        u64 e1 = aln->evt_en_, //old event aln
-            r1 = aln->ref_en_.start_; //old ref aln
+Although this does reduce the number of comparator function calls, there is no evident over all performance improvement of the program. More aggressive vectorized comparison was tried. Assuming FM-index range does not exceed 32-bit integers, it was tried to pick the 32-bit FM-index starting position as the only comparison key for an element, and compare 8 elements to the pivot element in a 256-bit AVX register at a time. At this configuration, in some test runs, there is as much as 6% over all performance improvement of the entire program. However, in other runs, with the exact same input, there is no acceleration at all. This seems to be extremely sensitive to system status, and is not a stable optimization.
 
-        bool higher_sup = aln_match == alignments_.end() 
-                       || aln_match->total_len_ < aln->total_len_,
-             
-             in_range = e1 <= e2 && //event aln must increase
-                        r2 - r1 <= e2 - e1 && //evt increases more than ref (+ skip)
-                        (r2 - r1) >= (e2 - e1) / 12; //evt doesn't increase too much
-             
-        if (higher_sup && in_range) {
-            aln_match = aln;
-        } else if (r2 - r1 >= e2) {
-            break;
-        }
-        aln++;
-    }
-```
+Apart from the bottom-up approach discussed above, a top-down approach of adopting a vectorized sorting algorithm is also considered. There are papers on the topic of sorting arrays of scalar elements using SIMD instructions. But it is difficult to do SIMD sorting in the case of UNCALLED, where we have two 64-bit integers and a floating point number together as three comparison keys.
 
-I have been contemplating a data structure that can locate the desired result, or at least the longest existing alignment prior to the new seed, in `O(1)` time, but I have not come up with an solution yet.
+## What haven't been done
 
-#### Speeding up sorting algorithm
-
-Sorting path buffers on every new event also takes around a quarter of overall program running time. Comparison between path buffers has been optimized as mentioned above. 
-
-There are papers, eg. [Fast Sorting Algorithms using AVX-512 on Intel Knights Landing](https://hal.inria.fr/hal-01512970v1/document), on SIMD vectorized sorting algorithms. These papers solve the problem of sorting an array of scalar values (eg. integers, floating point numbers). I am thinking how to accommodate the case in `UNCALLED` of having an 128-bit integer primary key and a floating number secondary key for comparison, and structures are being sorted instead of scalar values.
-
-#### FM-index on GPU
-
-There are a number of papers, eg. [Boosting the FM-Index on the GPU: Effective Techniques to Mitigate Random Memory Access](https://ieeexplore.ieee.org/document/6975110), on the topic of GPU acceleration of FM-index. They demonstrates the increase in numbers of queries can be done per second. This can be an idea for accelerating FM-index portion in `UNCALLED`.
-
-#### Parallelization of main mapping loop
-
-For each new event, besides a pass of sorting, there are two loops whose number of repetitions vary from a few times to a thousand times. This can probably be parallelized. But the entire process of handling a new event only takes a fraction of a millisecond. Is GPU suitable for parallelizing these loops?
+Improving cache locality has not been explored.

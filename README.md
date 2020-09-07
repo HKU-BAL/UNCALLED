@@ -12,6 +12,8 @@ Also supports standalone signal mapping of fast5 reads
 
 Read the [preprint on BioRxiv](https://www.biorxiv.org/content/10.1101/2020.02.03.931923v1)
 
+This is a slightly optimized version utilizing SSE and AVX instructions sets. See [OPTIMIZATION](OPTIMIZATION.md).
+
 ## Release notes
 
 - v2.0: released the ReadUntil simulator `uncalled sim`, which can predict how much enrichment UNCALLED could provide on a given reference, using a control and UNCALLED run as a template. Also CHANGED THE FORMAT OF CERTAIN ARGUMENTS. Index prefix and fast5 list are now positional, and some flags have changed names. See below for details.
